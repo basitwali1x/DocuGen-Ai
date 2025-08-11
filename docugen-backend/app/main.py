@@ -1,3 +1,5 @@
+import app.pil_compat  # Apply PIL compatibility fix before any other imports
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -10,6 +12,9 @@ from elevenlabs.client import ElevenLabs
 import json
 import uuid
 from datetime import datetime
+from typing import List, Optional, Dict, Any
+from app.services.video_generator import VideoGenerator
+from app.services.social_media import SocialMediaUploader
 
 load_dotenv()
 
@@ -26,12 +31,16 @@ app.add_middleware(
 
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+video_generator = VideoGenerator()
+social_uploader = SocialMediaUploader()
 
 video_generations = []
 
 class VideoGenerationRequest(BaseModel):
     topic: str
     niche: str
+    aspect_ratios: Optional[List[str]] = ["16:9", "9:16", "1:1"]
+    social_platforms: Optional[List[str]] = []
 
 class VideoGenerationResponse(BaseModel):
     id: str
@@ -39,6 +48,12 @@ class VideoGenerationResponse(BaseModel):
     niche: str
     status: str
     created_at: str
+    aspect_ratios: Optional[List[str]] = None
+    social_platforms: Optional[List[str]] = None
+
+class SocialUploadRequest(BaseModel):
+    generation_id: str
+    platforms: List[str]
 
 @app.get("/healthz")
 async def healthz():
@@ -69,6 +84,34 @@ async def download_audio(generation_id: str):
         media_type="audio/mpeg"
     )
 
+@app.get("/api/download-video/{generation_id}/{format}")
+async def download_video(generation_id: str, format: str):
+    generation = next((g for g in video_generations if g["id"] == generation_id), None)
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    
+    if generation["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Generation not completed yet")
+    
+    video_files = generation.get("video_files", {})
+    format_key = format.replace("x", ":")
+    
+    if format_key not in video_files or not video_files[format_key]:
+        raise HTTPException(status_code=404, detail=f"Video file not found for format {format}")
+    
+    file_path = video_files[format_key]
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Video file not found on disk")
+    
+    video_filename = f"documentary_{generation_id}_{format}.mp4"
+    
+    return FileResponse(
+        path=file_path,
+        filename=video_filename,
+        media_type="video/mp4"
+    )
+
 @app.post("/api/generate-video")
 async def generate_video(request: VideoGenerationRequest):
     try:
@@ -78,18 +121,59 @@ async def generate_video(request: VideoGenerationRequest):
             "topic": request.topic,
             "niche": request.niche,
             "status": "generating",
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
+            "aspect_ratios": request.aspect_ratios,
+            "social_platforms": request.social_platforms
         }
         video_generations.insert(0, generation)
         
-        asyncio.create_task(process_video_generation(generation_id, request.topic, request.niche))
+        asyncio.create_task(process_video_generation(
+            generation_id, 
+            request.topic, 
+            request.niche,
+            request.aspect_ratios,
+            request.social_platforms
+        ))
         
         return VideoGenerationResponse(**generation)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start video generation: {str(e)}")
 
-async def process_video_generation(generation_id: str, topic: str, niche: str):
+@app.post("/api/upload-to-social")
+async def upload_to_social(request: SocialUploadRequest):
+    try:
+        generation = next((g for g in video_generations if g["id"] == request.generation_id), None)
+        if not generation:
+            raise HTTPException(status_code=404, detail="Generation not found")
+        
+        if generation["status"] != "completed":
+            raise HTTPException(status_code=400, detail="Generation not completed yet")
+        
+        video_files = generation.get("video_files", {})
+        if not video_files:
+            raise HTTPException(status_code=400, detail="No video files available")
+        
+        title = f"Documentary: {generation['topic']}"
+        description = generation.get("description", f"An AI-generated documentary about {generation['topic']}")
+        
+        upload_results = social_uploader.upload_to_platforms(
+            video_files, title, description, request.platforms
+        )
+        
+        if "social_uploads" not in generation:
+            generation["social_uploads"] = {}
+        
+        generation["social_uploads"].update(upload_results)
+        
+        return {"status": "success", "results": upload_results}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload to social media: {str(e)}")
+
+async def process_video_generation(generation_id: str, topic: str, niche: str, 
+                                   aspect_ratios: List[str] = None, 
+                                   social_platforms: List[str] = None):
     try:
         generation = next((g for g in video_generations if g["id"] == generation_id), None)
         if not generation:
@@ -137,11 +221,33 @@ async def process_video_generation(generation_id: str, topic: str, niche: str):
         
         description = description_response.choices[0].message.content
         
+        video_files = {}
+        if aspect_ratios:
+            try:
+                video_files = video_generator.generate_multiple_formats(
+                    f"/tmp/{audio_filename}", script, topic, generation_id, aspect_ratios
+                )
+            except Exception as e:
+                print(f"Video generation failed: {e}")
+                video_files = {}
+        
         generation["status"] = "completed"
         generation["script"] = script
         generation["description"] = description
         generation["audio_file"] = audio_filename
+        generation["video_files"] = video_files
         generation["completed_at"] = datetime.now().isoformat()
+        
+        if social_platforms and video_files:
+            try:
+                title = f"Documentary: {topic}"
+                upload_results = social_uploader.upload_to_platforms(
+                    video_files, title, description, social_platforms
+                )
+                generation["social_uploads"] = upload_results
+            except Exception as e:
+                print(f"Social media upload failed: {e}")
+                generation["social_uploads"] = {}
         
     except Exception as e:
         generation = next((g for g in video_generations if g["id"] == generation_id), None)

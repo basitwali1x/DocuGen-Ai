@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Play, Clock, CheckCircle, XCircle, Download } from 'lucide-react'
+import { Loader2, Play, Clock, CheckCircle, XCircle, Download, Video, Share2 } from 'lucide-react'
 
 interface Generation {
   id: string
@@ -17,6 +17,19 @@ interface Generation {
   error?: string
   script?: string
   description?: string
+  aspect_ratios?: string[]
+  social_platforms?: string[]
+  video_files?: {
+    '16:9'?: string
+    '9:16'?: string
+    '1:1'?: string
+  }
+  social_uploads?: {
+    youtube?: { status: string; url?: string; message?: string }
+    tiktok?: { status: string; url?: string; message?: string }
+    facebook?: { status: string; url?: string; message?: string }
+    instagram?: { status: string; url?: string; message?: string }
+  }
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -32,9 +45,24 @@ const niches = [
   'Mystery & Unexplained'
 ]
 
+const aspectRatios = [
+  { value: '16:9', label: 'Landscape (16:9) - YouTube, Facebook' },
+  { value: '9:16', label: 'Portrait (9:16) - TikTok, Instagram Stories' },
+  { value: '1:1', label: 'Square (1:1) - Instagram Posts' }
+]
+
+const socialPlatforms = [
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' }
+]
+
 function App() {
   const [topic, setTopic] = useState('')
   const [selectedNiche, setSelectedNiche] = useState('')
+  const [selectedAspectRatios, setSelectedAspectRatios] = useState<string[]>(['16:9'])
+  const [selectedSocialPlatforms, setSelectedSocialPlatforms] = useState<string[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [generations, setGenerations] = useState<Generation[]>([])
   const [error, setError] = useState('')
@@ -61,6 +89,11 @@ function App() {
       return
     }
 
+    if (selectedAspectRatios.length === 0) {
+      setError('Please select at least one aspect ratio')
+      return
+    }
+
     setIsGenerating(true)
     setError('')
 
@@ -73,6 +106,8 @@ function App() {
         body: JSON.stringify({
           topic: topic.trim(),
           niche: selectedNiche,
+          aspect_ratios: selectedAspectRatios,
+          social_platforms: selectedSocialPlatforms,
         }),
       })
 
@@ -83,6 +118,8 @@ function App() {
 
       setTopic('')
       setSelectedNiche('')
+      setSelectedAspectRatios(['16:9'])
+      setSelectedSocialPlatforms([])
       fetchGenerations()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start video generation')
@@ -115,6 +152,86 @@ function App() {
       <Badge variant={variants[status as keyof typeof variants] || 'secondary'}>
         {status}
       </Badge>
+    )
+  }
+
+  const handleAspectRatioChange = (ratio: string, checked: boolean) => {
+    if (checked) {
+      setSelectedAspectRatios([...selectedAspectRatios, ratio])
+    } else {
+      setSelectedAspectRatios(selectedAspectRatios.filter(r => r !== ratio))
+    }
+  }
+
+  const handleSocialPlatformChange = (platform: string, checked: boolean) => {
+    if (checked) {
+      setSelectedSocialPlatforms([...selectedSocialPlatforms, platform])
+    } else {
+      setSelectedSocialPlatforms(selectedSocialPlatforms.filter(p => p !== platform))
+    }
+  }
+
+  const getVideoDownloadButtons = (generation: Generation) => {
+    if (!generation.video_files) return null
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {Object.entries(generation.video_files).map(([format, filePath]) => {
+          if (!filePath) return null
+          
+          const formatLabel = format === '16:9' ? 'Landscape' : 
+                             format === '9:16' ? 'Portrait' : 'Square'
+          
+          return (
+            <Button
+              key={format}
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const downloadUrl = `${API_URL}/api/download-video/${generation.id}/${format.replace(':', 'x')}`
+                window.open(downloadUrl, '_blank')
+              }}
+              className="flex items-center gap-1"
+            >
+              <Video className="h-3 w-3" />
+              {formatLabel} ({format})
+            </Button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const getSocialUploadStatus = (generation: Generation) => {
+    if (!generation.social_uploads) return null
+
+    return (
+      <div className="mt-2">
+        <p className="text-xs font-medium text-gray-600 mb-1">Social Media Status:</p>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(generation.social_uploads).map(([platform, result]) => (
+            <div key={platform} className="flex items-center gap-1">
+              <Badge 
+                variant={result.status === 'success' ? 'default' : 
+                        result.status === 'pending' ? 'secondary' : 'destructive'}
+                className="text-xs"
+              >
+                {platform}: {result.status}
+              </Badge>
+              {result.url && (
+                <a 
+                  href={result.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:text-blue-700"
+                >
+                  <Share2 className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     )
   }
 
@@ -168,6 +285,52 @@ function App() {
               </Select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Video Formats
+              </label>
+              <div className="space-y-2">
+                {aspectRatios.map((ratio) => (
+                  <div key={ratio.value} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`ratio-${ratio.value}`}
+                      checked={selectedAspectRatios.includes(ratio.value)}
+                      onChange={(e) => handleAspectRatioChange(ratio.value, e.target.checked)}
+                      disabled={isGenerating}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor={`ratio-${ratio.value}`} className="text-sm text-gray-700">
+                      {ratio.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Auto-Post to Social Media (Optional)
+              </label>
+              <div className="space-y-2">
+                {socialPlatforms.map((platform) => (
+                  <div key={platform.value} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`platform-${platform.value}`}
+                      checked={selectedSocialPlatforms.includes(platform.value)}
+                      onChange={(e) => handleSocialPlatformChange(platform.value, e.target.checked)}
+                      disabled={isGenerating}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor={`platform-${platform.value}`} className="text-sm text-gray-700">
+                      {platform.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {error && (
               <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md">
                 {error}
@@ -176,7 +339,7 @@ function App() {
 
             <Button
               onClick={handleGenerate}
-              disabled={isGenerating || !topic.trim() || !selectedNiche}
+              disabled={isGenerating || !topic.trim() || !selectedNiche || selectedAspectRatios.length === 0}
               className="w-full"
             >
               {isGenerating ? (
@@ -236,9 +399,11 @@ function App() {
                             "{generation.description}"
                           </p>
                         )}
+                        {generation.status === 'completed' && getVideoDownloadButtons(generation)}
+                        {generation.status === 'completed' && getSocialUploadStatus(generation)}
                       </div>
                       {generation.status === 'completed' && (
-                        <div className="ml-4">
+                        <div className="ml-4 space-y-2">
                           <Button
                             variant="outline"
                             size="sm"
