@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
@@ -46,6 +47,27 @@ async def healthz():
 @app.get("/api/generations")
 async def get_generations():
     return {"generations": video_generations}
+
+@app.get("/api/download/{generation_id}")
+async def download_audio(generation_id: str):
+    generation = next((g for g in video_generations if g["id"] == generation_id), None)
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    
+    if generation["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Generation not completed yet")
+    
+    audio_filename = f"voiceover_{generation_id}.mp3"
+    file_path = f"/tmp/{audio_filename}"
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    return FileResponse(
+        path=file_path,
+        filename=audio_filename,
+        media_type="audio/mpeg"
+    )
 
 @app.post("/api/generate-video")
 async def generate_video(request: VideoGenerationRequest):

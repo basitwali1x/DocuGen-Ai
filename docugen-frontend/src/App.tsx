@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Play, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { Loader2, Play, Clock, CheckCircle, XCircle, Download } from 'lucide-react'
 
 interface Generation {
   id: string
@@ -237,6 +237,22 @@ function App() {
                           </p>
                         )}
                       </div>
+                      {generation.status === 'completed' && (
+                        <div className="ml-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const downloadUrl = `${API_URL}/api/download/${generation.id}`
+                              window.open(downloadUrl, '_blank')
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Download className="h-4 w-4" />
+                            Download Audio
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
