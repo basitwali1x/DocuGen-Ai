@@ -120,9 +120,13 @@ async def generate_video(request: VideoGenerationRequest, x_api_key: str = Heade
     logger.info(f"Incoming video generation request for topic: {request.topic}")
     logger.debug(f"Request details: {request.dict()}")
 
-    if not x_api_key or x_api_key != os.getenv("BACKEND_API_KEY"):
+    backend_api_key = os.getenv("BACKEND_API_KEY")
+    logger.info(f"Received API key: {x_api_key[:10] if x_api_key else 'None'}...")
+    logger.info(f"Expected API key: {backend_api_key[:10] if backend_api_key else 'None'}...")
+    
+    if not x_api_key or x_api_key != backend_api_key:
         logger.error("Missing or invalid X-API-Key header")
-        raise HTTPException(status_code=401, detail="Invalid API key")
+        raise HTTPException(status_code=401, detail={"status": "invalid_api_key", "message": "Invalid API key"})
 
     try:
         generation_id = str(uuid.uuid4())
