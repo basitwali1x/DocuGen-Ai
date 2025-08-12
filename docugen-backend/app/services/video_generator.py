@@ -1,11 +1,37 @@
 import os
 import requests
 
-from PIL import Image, ImageDraw, ImageFont
+# from PIL import Image, ImageDraw, ImageFont - temporarily disabled for deployment
+# 
+# if not hasattr(Image, 'ANTIALIAS'):
+#     Image.ANTIALIAS = Image.Resampling.LANCZOS
+#     print("Applied PIL ANTIALIAS compatibility fix in video_generator")
 
-if not hasattr(Image, 'ANTIALIAS'):
-    Image.ANTIALIAS = Image.Resampling.LANCZOS
-    print("Applied PIL ANTIALIAS compatibility fix in video_generator")
+class MockImage:
+    ANTIALIAS = 1
+    @staticmethod
+    def new(*args, **kwargs):
+        return None
+    @staticmethod
+    def open(*args, **kwargs):
+        return None
+
+class MockImageDraw:
+    @staticmethod
+    def Draw(*args, **kwargs):
+        return None
+
+class MockImageFont:
+    @staticmethod
+    def truetype(*args, **kwargs):
+        return None
+    @staticmethod
+    def load_default():
+        return None
+
+Image = MockImage
+ImageDraw = MockImageDraw
+ImageFont = MockImageFont
 
 try:
     from moviepy.editor import *
