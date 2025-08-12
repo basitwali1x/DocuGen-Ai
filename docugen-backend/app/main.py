@@ -1,4 +1,7 @@
-import app.pil_compat  # Apply PIL compatibility fix before any other imports
+try:
+    import app.pil_compat  # Apply PIL compatibility fix before any other imports
+except ImportError:
+    print("PIL compatibility module not available - video generation may be limited")
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
