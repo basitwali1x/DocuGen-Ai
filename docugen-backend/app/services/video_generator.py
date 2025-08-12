@@ -1,35 +1,59 @@
 import os
 import requests
 
-try:
-    from PIL import Image, ImageDraw, ImageFont
+PIL_AVAILABLE = None
+Image = None
+ImageDraw = None
+ImageFont = None
+
+def _ensure_pil_loaded():
+    """Lazy load PIL components when needed"""
+    global PIL_AVAILABLE, Image, ImageDraw, ImageFont
     
-    if not hasattr(Image, 'ANTIALIAS'):
-        Image.ANTIALIAS = Image.Resampling.LANCZOS
-        print("Applied PIL ANTIALIAS compatibility fix in video_generator")
+    if PIL_AVAILABLE is not None:
+        return PIL_AVAILABLE
     
-    PIL_AVAILABLE = True
-except ImportError as e:
-    print(f"PIL/Pillow not available in video_generator: {e}")
-    PIL_AVAILABLE = False
-    class Image:
-        @staticmethod
-        def new(*args, **kwargs):
-            return None
-        @staticmethod
-        def open(*args, **kwargs):
-            return None
-    class ImageDraw:
-        @staticmethod
-        def Draw(*args, **kwargs):
-            return None
-    class ImageFont:
-        @staticmethod
-        def truetype(*args, **kwargs):
-            return None
-        @staticmethod
-        def load_default():
-            return None
+    try:
+        from PIL import Image as PILImage, ImageDraw as PILImageDraw, ImageFont as PILImageFont
+        
+        if not hasattr(PILImage, 'ANTIALIAS'):
+            PILImage.ANTIALIAS = PILImage.Resampling.LANCZOS
+            print("Applied PIL ANTIALIAS compatibility fix in video_generator")
+        
+        Image = PILImage
+        ImageDraw = PILImageDraw
+        ImageFont = PILImageFont
+        PIL_AVAILABLE = True
+        print("PIL loaded successfully")
+        
+    except ImportError as e:
+        print(f"PIL/Pillow not available in video_generator: {e}")
+        PIL_AVAILABLE = False
+        
+        class DummyImage:
+            @staticmethod
+            def new(*args, **kwargs):
+                return None
+            @staticmethod
+            def open(*args, **kwargs):
+                return None
+        class DummyImageDraw:
+            @staticmethod
+            def Draw(*args, **kwargs):
+                return None
+        class DummyImageFont:
+            @staticmethod
+            def truetype(*args, **kwargs):
+                return None
+            @staticmethod
+            def load_default():
+                return None
+        
+        Image = DummyImage
+        ImageDraw = DummyImageDraw
+        ImageFont = DummyImageFont
+    
+    return PIL_AVAILABLE
 
 try:
     from moviepy.editor import *
@@ -143,7 +167,7 @@ class VideoGenerator:
         return None
     
     def _create_placeholder_image(self, image_data: Dict) -> str:
-        if not PIL_AVAILABLE:
+        if not _ensure_pil_loaded():
             filename = f"{self.temp_dir}/placeholder_{image_data['id']}.txt"
             with open(filename, 'w') as f:
                 f.write(f"Placeholder for {image_data.get('keyword', 'Documentary')}")
@@ -301,7 +325,7 @@ class VideoGenerator:
     
     def _preprocess_image_for_moviepy(self, img_file: str, target_width: int, target_height: int) -> Optional[str]:
         """Preprocess image to avoid PIL compatibility issues with MoviePy"""
-        if not PIL_AVAILABLE:
+        if not _ensure_pil_loaded():
             logger.warning("PIL not available - cannot preprocess images")
             return img_file
             
