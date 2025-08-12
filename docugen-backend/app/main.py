@@ -1,4 +1,7 @@
-import app.pil_compat  # Apply PIL compatibility fix before any other imports
+try:
+    import app.pil_compat  # Apply PIL compatibility fix before any other imports
+except ImportError:
+    print("PIL compatibility module not available - video generation may be limited")
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,8 +32,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+try:
+    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+except Exception as e:
+    print(f"Warning: OpenAI client initialization failed: {e}")
+    openai_client = None
+
+try:
+    elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+except Exception as e:
+    print(f"Warning: ElevenLabs client initialization failed: {e}")
+    elevenlabs_client = None
 video_generator = VideoGenerator()
 social_uploader = SocialMediaUploader()
 
@@ -112,8 +124,13 @@ async def download_video(generation_id: str, format: str):
         media_type="video/mp4"
     )
 
-@app.post("/api/generate-video")
+@app.post("/api/generations", response_model=VideoGenerationResponse)
 async def generate_video(request: VideoGenerationRequest):
+    if not openai_client or not elevenlabs_client:
+        raise HTTPException(
+            status_code=503, 
+            detail="API services not available - missing API keys. Please configure OPENAI_API_KEY and ELEVENLABS_API_KEY environment variables."
+        )
     try:
         generation_id = str(uuid.uuid4())
         generation = {
@@ -131,8 +148,8 @@ async def generate_video(request: VideoGenerationRequest):
             generation_id, 
             request.topic, 
             request.niche,
-            request.aspect_ratios,
-            request.social_platforms
+            request.aspect_ratios or [],
+            request.social_platforms or []
         ))
         
         return VideoGenerationResponse(**generation)
@@ -172,8 +189,8 @@ async def upload_to_social(request: SocialUploadRequest):
         raise HTTPException(status_code=500, detail=f"Failed to upload to social media: {str(e)}")
 
 async def process_video_generation(generation_id: str, topic: str, niche: str, 
-                                   aspect_ratios: List[str] = None, 
-                                   social_platforms: List[str] = None):
+                                   aspect_ratios: Optional[List[str]] = None, 
+                                   social_platforms: Optional[List[str]] = None):
     try:
         generation = next((g for g in video_generations if g["id"] == generation_id), None)
         if not generation:
