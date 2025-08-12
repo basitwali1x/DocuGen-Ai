@@ -69,7 +69,9 @@ function App() {
 
   useEffect(() => {
     fetchGenerations()
-    
+  }, [])
+
+  useEffect(() => {
     const hasActiveGenerations = generations.some(g => g.status === 'generating')
     if (hasActiveGenerations) {
       const interval = setInterval(fetchGenerations, 5000)
