@@ -33,8 +33,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+openai_api_key = os.getenv("OPENAI_API_KEY")
+elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
+
+if openai_api_key:
+    openai_client = OpenAI(api_key=openai_api_key)
+else:
+    logger.warning("OPENAI_API_KEY not found - OpenAI functionality will be disabled")
+    openai_client = None
+
+if elevenlabs_api_key:
+    elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
+else:
+    logger.warning("ELEVENLABS_API_KEY not found - ElevenLabs functionality will be disabled")
+    elevenlabs_client = None
+
 video_generator = VideoGenerator()
 social_uploader = SocialMediaUploader()
 
@@ -198,6 +211,10 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         Include a strong opening hook, key facts, and a memorable conclusion.
         Format as a narrative script without stage directions."""
         
+        if not openai_client:
+            logger.error(f"OpenAI client not available for generation {generation_id}")
+            raise Exception("Script generation failed: OpenAI API key not configured")
+            
         try:
             script_response = openai_client.chat.completions.create(
                 model="gpt-4",
@@ -213,6 +230,10 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         
         script = script_response.choices[0].message.content
         
+        if not elevenlabs_client:
+            logger.error(f"ElevenLabs client not available for generation {generation_id}")
+            raise Exception("Voice generation failed: ElevenLabs API key not configured")
+            
         try:
             audio = elevenlabs_client.text_to_speech.convert(
                 text=script,
@@ -232,6 +253,10 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         description_prompt = f"""Create a brief, engaging description for a documentary video about {topic}. 
         Keep it under 200 characters and make it compelling for viewers."""
         
+        if not openai_client:
+            logger.error(f"OpenAI client not available for description generation {generation_id}")
+            raise Exception("Description generation failed: OpenAI API key not configured")
+            
         try:
             description_response = openai_client.chat.completions.create(
                 model="gpt-4",
