@@ -2,6 +2,8 @@
 
 from PIL import Image
 
-if not hasattr(Image, 'ANTIALIAS'):
+try:
+    Image.ANTIALIAS
+except AttributeError:
     Image.ANTIALIAS = Image.Resampling.LANCZOS
-    print("Applied PIL ANTIALIAS compatibility fix")
+    print("Applied PIL ANTIALIAS compatibility fix for newer Pillow versions")
