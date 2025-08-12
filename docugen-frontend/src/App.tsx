@@ -32,7 +32,7 @@ interface Generation {
   }
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 const niches = [
   'Business Failures & Scandals',
@@ -75,7 +75,12 @@ function App() {
 
   const fetchGenerations = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/generations`)
+      const response = await fetch(`${API_URL}/api/generations`, {
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
       const data = await response.json()
       setGenerations(data.generations || [])
     } catch (err) {
@@ -100,6 +105,7 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/api/generate-video`, {
         method: 'POST',
+        mode: 'cors',
         headers: {
           'Content-Type': 'application/json',
         },
