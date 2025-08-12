@@ -108,6 +108,7 @@ function App() {
         mode: 'cors',
         headers: {
           'Content-Type': 'application/json',
+          'X-API-Key': import.meta.env.VITE_API_KEY
         },
         body: JSON.stringify({
           topic: topic.trim(),
