@@ -1,5 +1,3 @@
-import app.pil_compat  # Apply PIL compatibility fix before any other imports
-
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
