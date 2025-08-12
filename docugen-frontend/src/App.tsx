@@ -103,7 +103,7 @@ function App() {
     setError('')
 
     try {
-      const response = await fetch(`${API_URL}/api/generate-video`, {
+      const response = await fetch(`${API_URL}/api/generations`, {
         method: 'POST',
         mode: 'cors',
         headers: {
