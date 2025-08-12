@@ -15,7 +15,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://user:4c530ed5fc1789739491c320daffc32c@documentary-generator-tunnel-94fuyy8g.devinapps.com',
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '')
