@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -66,20 +66,9 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generations, setGenerations] = useState<Generation[]>([])
   const [error, setError] = useState('')
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  useEffect(() => {
-    fetchGenerations()
-  }, [])
-
-  useEffect(() => {
-    const hasActiveGenerations = generations.some(g => g.status === 'generating')
-    if (hasActiveGenerations) {
-      const interval = setInterval(fetchGenerations, 5000)
-      return () => clearInterval(interval)
-    }
-  }, [generations])
-
-  const fetchGenerations = async () => {
+  const fetchGenerations = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/generations`, {
         mode: 'cors',
@@ -92,7 +81,30 @@ function App() {
     } catch (err) {
       console.error('Failed to fetch generations:', err)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchGenerations()
+  }, [fetchGenerations])
+
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+
+    const hasActiveGenerations = generations.some(g => g.status === 'generating')
+    if (hasActiveGenerations) {
+      intervalRef.current = setInterval(fetchGenerations, 5000)
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [generations, fetchGenerations])
 
   const handleGenerate = async () => {
     if (!topic.trim() || !selectedNiche) {
