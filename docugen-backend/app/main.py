@@ -26,7 +26,7 @@ app = FastAPI(title="DocuGen AI", description="AI-powered documentary video gene
 allowed_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in allowed_origins],
+    allow_origins=["*"],  # Temporarily allow all origins for deployment
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
