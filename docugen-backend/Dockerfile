@@ -3,15 +3,25 @@ FROM python:3.12
 # Install system dependencies for Pillow, MoviePy and video processing
 RUN apt-get update && apt-get install -y \
     libjpeg62-turbo-dev \
+    libjpeg62-turbo \
     libpng-dev \
+    libpng16-16 \
     libtiff5-dev \
+    libtiff5 \
     libfreetype6-dev \
+    libfreetype6 \
     liblcms2-dev \
+    liblcms2-2 \
     libwebp-dev \
+    libwebp7 \
     libharfbuzz-dev \
+    libharfbuzz0b \
     libfribidi-dev \
+    libfribidi0 \
     libxcb1-dev \
+    libxcb1 \
     zlib1g-dev \
+    zlib1g \
     pkg-config \
     gcc \
     g++ \
