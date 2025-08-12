@@ -180,7 +180,7 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
             return
             
         script_prompt = f"""Create a compelling documentary script about {topic} in the {niche} niche. 
-        The script should be engaging, informative, and suitable for a 2-3 minute video.
+        The script should be engaging, informative, and suitable for a 5-10 minute documentary.
         Include a strong opening hook, key facts, and a memorable conclusion.
         Format as a narrative script without stage directions."""
         
@@ -190,7 +190,7 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
                 {"role": "system", "content": "You are a professional documentary scriptwriter."},
                 {"role": "user", "content": script_prompt}
             ],
-            max_tokens=1000
+            max_tokens=2500
         )
         
         script = script_response.choices[0].message.content
