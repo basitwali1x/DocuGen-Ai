@@ -134,8 +134,7 @@ async def generate_video(request: VideoGenerationRequest, x_api_key: str = Heade
     logger.info(f"Incoming video generation request for topic: {request.topic}")
     logger.debug(f"Request details: {request.dict()}")
 
-    backend_api_key = os.getenv("BACKEND_API_KEY")
-    if not x_api_key or (backend_api_key and x_api_key != backend_api_key and x_api_key != "test-key"):
+    if not x_api_key or x_api_key != os.getenv("BACKEND_API_KEY"):
         logger.error("Missing or invalid X-API-Key header")
         raise HTTPException(status_code=401, detail="Invalid API key")
 
