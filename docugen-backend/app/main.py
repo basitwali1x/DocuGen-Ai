@@ -1,4 +1,4 @@
-import app.pil_compat  # Apply PIL compatibility fix before any other imports
+# import app.pil_compat  # Apply PIL compatibility fix before any other imports - disabled due to system dependency issues
 
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,8 +29,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+try:
+    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    print("✅ OpenAI client initialized successfully")
+except Exception as e:
+    print(f"⚠️ OpenAI client initialization failed: {e}")
+    openai_client = None
+
+try:
+    elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+    print("✅ ElevenLabs client initialized successfully")
+except Exception as e:
+    print(f"⚠️ ElevenLabs client initialization failed: {e}")
+    elevenlabs_client = None
 video_generator = VideoGenerator()
 social_uploader = SocialMediaUploader()
 
@@ -194,6 +205,9 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         Include a strong opening hook, key facts, and a memorable conclusion.
         Format as a narrative script without stage directions."""
         
+        if not openai_client:
+            raise Exception("OpenAI client not available - missing API key")
+            
         script_response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
@@ -205,6 +219,9 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         
         script = script_response.choices[0].message.content
         
+        if not elevenlabs_client:
+            raise Exception("ElevenLabs client not available - missing API key")
+            
         audio = elevenlabs_client.text_to_speech.convert(
             text=script,
             voice_id="JBFqnCBsd6RMkjVDRZzb",  # Default voice
@@ -220,6 +237,9 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         description_prompt = f"""Create a brief, engaging description for a documentary video about {topic}. 
         Keep it under 200 characters and make it compelling for viewers."""
         
+        if not openai_client:
+            raise Exception("OpenAI client not available - missing API key")
+            
         description_response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
@@ -234,11 +254,13 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         video_files = {}
         if aspect_ratios:
             try:
+                print(f"🎬 Attempting video generation for {generation_id}")
                 video_files = video_generator.generate_multiple_formats(
                     f"/tmp/{audio_filename}", script, topic, generation_id, aspect_ratios
                 )
+                print(f"🎬 Video generation result: {video_files}")
             except Exception as e:
-                print(f"Video generation failed: {e}")
+                print(f"❌ Video generation failed for {generation_id}: {e}")
                 video_files = {}
         
         generation["status"] = "completed"

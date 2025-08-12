@@ -82,7 +82,11 @@ function App() {
         }
       })
       const data = await response.json()
-      setGenerations(data.generations || [])
+      const newGenerations = data.generations || []
+      
+      if (JSON.stringify(newGenerations) !== JSON.stringify(generations)) {
+        setGenerations(newGenerations)
+      }
     } catch (err) {
       console.error('Failed to fetch generations:', err)
     }
