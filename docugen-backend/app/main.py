@@ -186,8 +186,8 @@ async def upload_to_social(request: SocialUploadRequest):
         raise HTTPException(status_code=500, detail=f"Failed to upload to social media: {str(e)}")
 
 async def process_video_generation(generation_id: str, topic: str, niche: str, 
-                                   aspect_ratios: List[str] = None, 
-                                   social_platforms: List[str] = None):
+                                   aspect_ratios: Optional[List[str]] = None, 
+                                   social_platforms: Optional[List[str]] = None):
     try:
         generation = next((g for g in video_generations if g["id"] == generation_id), None)
         if not generation:
@@ -198,23 +198,31 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         Include a strong opening hook, key facts, and a memorable conclusion.
         Format as a narrative script without stage directions."""
         
-        script_response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a professional documentary scriptwriter."},
-                {"role": "user", "content": script_prompt}
-            ],
-            max_tokens=1000
-        )
+        try:
+            script_response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a professional documentary scriptwriter."},
+                    {"role": "user", "content": script_prompt}
+                ],
+                max_tokens=1000
+            )
+        except Exception as openai_error:
+            logger.error(f"OpenAI API error for generation {generation_id}: {str(openai_error)}")
+            raise Exception(f"Script generation failed: {str(openai_error)}")
         
         script = script_response.choices[0].message.content
         
-        audio = elevenlabs_client.text_to_speech.convert(
-            text=script,
-            voice_id="JBFqnCBsd6RMkjVDRZzb",  # Default voice
-            model_id="eleven_multilingual_v2",
-            output_format="mp3_44100_128"
-        )
+        try:
+            audio = elevenlabs_client.text_to_speech.convert(
+                text=script,
+                voice_id="JBFqnCBsd6RMkjVDRZzb",  # Default voice
+                model_id="eleven_multilingual_v2",
+                output_format="mp3_44100_128"
+            )
+        except Exception as elevenlabs_error:
+            logger.error(f"ElevenLabs API error for generation {generation_id}: {str(elevenlabs_error)}")
+            raise Exception(f"Voice generation failed: {str(elevenlabs_error)}")
         
         audio_filename = f"voiceover_{generation_id}.mp3"
         with open(f"/tmp/{audio_filename}", "wb") as f:
@@ -224,14 +232,18 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         description_prompt = f"""Create a brief, engaging description for a documentary video about {topic}. 
         Keep it under 200 characters and make it compelling for viewers."""
         
-        description_response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a video marketing expert."},
-                {"role": "user", "content": description_prompt}
-            ],
-            max_tokens=100
-        )
+        try:
+            description_response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a video marketing expert."},
+                    {"role": "user", "content": description_prompt}
+                ],
+                max_tokens=100
+            )
+        except Exception as openai_error:
+            logger.error(f"OpenAI API error for description generation {generation_id}: {str(openai_error)}")
+            raise Exception(f"Description generation failed: {str(openai_error)}")
         
         description = description_response.choices[0].message.content
         
@@ -268,14 +280,25 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         generation = next((g for g in video_generations if g["id"] == generation_id), None)
         if generation:
             generation["status"] = "failed"
-            generation["error"] = str(e)
             generation["failed_at"] = datetime.now().isoformat()
             
-            if "MoviePy" in str(e) or "video" in str(e).lower():
+            error_message = str(e)
+            
+            if "Script generation failed:" in error_message:
+                generation["error"] = "Failed to generate script using OpenAI. Please check your OpenAI API key and try again."
+                generation["error_type"] = "openai_api"
+            elif "Voice generation failed:" in error_message:
+                generation["error"] = "Failed to generate voice using ElevenLabs. Please check your ElevenLabs API key and try again."
+                generation["error_type"] = "elevenlabs_api"
+            elif "Description generation failed:" in error_message:
+                generation["error"] = "Failed to generate description using OpenAI. Please check your OpenAI API key and try again."
+                generation["error_type"] = "openai_api"
+            elif "MoviePy" in error_message or "video" in error_message.lower():
+                generation["error"] = "Video processing failed. This may be due to system resources or video generation issues."
                 generation["error_type"] = "video_processing"
-            elif "OpenAI" in str(e) or "ElevenLabs" in str(e):
-                generation["error_type"] = "ai_service"
-            elif "Pexels" in str(e) or "image" in str(e).lower():
+            elif "Pexels" in error_message or "image" in error_message.lower():
+                generation["error"] = "Image retrieval failed. Please check your Pexels API key and try again."
                 generation["error_type"] = "image_service"
             else:
+                generation["error"] = f"An unexpected error occurred: {error_message}"
                 generation["error_type"] = "general"
