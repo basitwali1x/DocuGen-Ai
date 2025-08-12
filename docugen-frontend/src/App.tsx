@@ -42,7 +42,29 @@ const niches = [
   'Nature & Wildlife',
   'Sports & Athletes',
   'Art & Culture',
-  'Mystery & Unexplained'
+  'Mystery & Unexplained',
+  'Health & Medicine',
+  'Space & Astronomy',
+  'Ancient Civilizations',
+  'War & Military History',
+  'Economics & Finance',
+  'Psychology & Human Behavior',
+  'Environmental Issues',
+  'Innovation & Inventions',
+  'Music & Entertainment',
+  'Food & Culinary History',
+  'Transportation & Travel',
+  'Architecture & Engineering',
+  'Politics & Government',
+  'Social Movements',
+  'Disasters & Catastrophes',
+  'Conspiracy Theories',
+  'Biographies & Life Stories',
+  'Religion & Spirituality',
+  'Education & Learning',
+  'Fashion & Lifestyle',
+  'Gaming & Digital Culture',
+  'Artificial Intelligence & Future Tech'
 ]
 
 const aspectRatios = [
@@ -69,7 +91,7 @@ function App() {
 
   useEffect(() => {
     fetchGenerations()
-    const interval = setInterval(fetchGenerations, 3000)
+    const interval = setInterval(fetchGenerations, 5000)
     return () => clearInterval(interval)
   }, [])
 
