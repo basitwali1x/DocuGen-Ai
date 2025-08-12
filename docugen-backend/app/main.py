@@ -20,13 +20,13 @@ load_dotenv()
 
 app = FastAPI(title="DocuGen AI", description="AI-powered documentary video generation platform")
 
-# Disable CORS. Do not remove this for full-stack development.
+allowed_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=[origin.strip() for origin in allowed_origins],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))

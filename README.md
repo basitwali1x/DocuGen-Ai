@@ -56,3 +56,36 @@
    ```bash
    poetry run uvicorn app.main:app --reload
    ```
+
+## Production Deployment
+
+### Frontend Production Configuration
+For production deployment, configure the following environment variables:
+
+1. **VITE_API_URL**: Set this to your actual backend API URL
+   ```
+   VITE_API_URL=https://your-backend-api-domain.com
+   ```
+
+2. Build the frontend for production:
+   ```bash
+   cd docugen-frontend
+   npm run build
+   ```
+
+### Backend Production Configuration
+For production deployment, configure the following environment variables:
+
+1. **CORS_ORIGINS**: Set this to your frontend domain(s) for security
+   ```
+   CORS_ORIGINS=https://your-frontend-domain.com,https://www.your-frontend-domain.com
+   ```
+   
+   For development, you can use `CORS_ORIGINS=*` to allow all origins.
+
+2. **API Keys**: Configure all required API keys as shown in the backend setup section above.
+
+### Important Notes
+- **Development**: The Vite proxy automatically forwards `/api` requests to `http://localhost:8000` (or `VITE_PROXY_TARGET` if set)
+- **Production**: The frontend will use `VITE_API_URL` to make direct API calls to your backend
+- **Security**: Always set `CORS_ORIGINS` to specific domains in production, never use `*` in production environments
