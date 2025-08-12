@@ -1,6 +1,6 @@
 import app.pil_compat  # Apply PIL compatibility fix before any other imports
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -113,9 +113,18 @@ async def download_video(generation_id: str, format: str):
     )
 
 @app.post("/api/generate-video")
-async def generate_video(request: VideoGenerationRequest):
+async def generate_video(request: VideoGenerationRequest, x_api_key: str = Header(None, alias="X-API-Key")):
+    print(f"\n🔑 DEBUG: Incoming X-API-Key: {x_api_key}")
+    print(f"🔍 DEBUG: Request Body: {request.dict()}")
+
+    if not x_api_key or x_api_key != os.getenv("BACKEND_API_KEY"):
+        print("❌ ERROR: Missing/Invalid X-API-Key Header")
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
     try:
         generation_id = str(uuid.uuid4())
+        print(f"📌 DEBUG: Starting Generation {generation_id}")
+        
         generation = {
             "id": generation_id,
             "topic": request.topic,
@@ -138,7 +147,8 @@ async def generate_video(request: VideoGenerationRequest):
         return VideoGenerationResponse(**generation)
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start video generation: {str(e)}")
+        print(f"🔥 CRITICAL ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload-to-social")
 async def upload_to_social(request: SocialUploadRequest):
