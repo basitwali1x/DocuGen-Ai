@@ -1,11 +1,34 @@
 import os
 import requests
 
-from PIL import Image, ImageDraw, ImageFont
-
-if not hasattr(Image, 'ANTIALIAS'):
-    Image.ANTIALIAS = Image.Resampling.LANCZOS
-    print("Applied PIL ANTIALIAS compatibility fix in video_generator")
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+    
+    if not hasattr(Image, 'ANTIALIAS'):
+        Image.ANTIALIAS = Image.Resampling.LANCZOS
+        print("Applied PIL ANTIALIAS compatibility fix in video_generator")
+except ImportError:
+    print("PIL/Pillow not available in video_generator - image processing will be disabled")
+    PIL_AVAILABLE = False
+    class Image:
+        @staticmethod
+        def new(*args, **kwargs):
+            return None
+        @staticmethod
+        def open(*args, **kwargs):
+            return None
+    class ImageDraw:
+        @staticmethod
+        def Draw(*args, **kwargs):
+            return None
+    class ImageFont:
+        @staticmethod
+        def truetype(*args, **kwargs):
+            return None
+        @staticmethod
+        def load_default(*args, **kwargs):
+            return None
 
 try:
     from moviepy.editor import *
@@ -119,6 +142,10 @@ class VideoGenerator:
         return None
     
     def _create_placeholder_image(self, image_data: Dict) -> str:
+        if not PIL_AVAILABLE:
+            logger.error("PIL not available - cannot create placeholder images")
+            return None
+            
         width, height = 1920, 1080
         color = image_data.get("color", (100, 100, 100))
         
@@ -271,6 +298,10 @@ class VideoGenerator:
     
     def _preprocess_image_for_moviepy(self, img_file: str, target_width: int, target_height: int) -> Optional[str]:
         """Preprocess image to avoid PIL compatibility issues with MoviePy"""
+        if not PIL_AVAILABLE:
+            logger.error("PIL not available - cannot preprocess images")
+            return img_file  # Return original file if PIL not available
+            
         try:
             with Image.open(img_file) as img:
                 if img.mode != 'RGB':
@@ -286,7 +317,7 @@ class VideoGenerator:
                 
         except Exception as e:
             logger.error(f"Error preprocessing image {img_file}: {e}")
-            return None
+            return img_file  # Return original file if preprocessing fails
     
     def generate_multiple_formats(self, audio_file: str, script: str, topic: str, 
                                  generation_id: str, formats: List[str] = None) -> Dict[str, Optional[str]]:
