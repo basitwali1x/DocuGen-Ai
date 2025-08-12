@@ -147,8 +147,9 @@ class VideoGenerator:
     def create_video(self, audio_file: str, script: str, topic: str, generation_id: str, 
                     aspect_ratio: str = "16:9") -> Optional[str]:
         if not MOVIEPY_AVAILABLE:
-            logger.error("MoviePy not available - video creation disabled")
-            return None
+            error_msg = "MoviePy not available - video creation disabled. Install moviepy to enable video generation."
+            logger.error(error_msg)
+            raise Exception(error_msg)
             
         try:
             keywords = self.extract_keywords(script, topic)
@@ -219,22 +220,45 @@ class VideoGenerator:
                 logger=None
             )
             
-            video.close()
-            audio_clip.close()
-            for clip in clips:
-                clip.close()
-            
-            for img_file in image_files:
+            try:
+                video.close()
+                audio_clip.close()
+                for clip in clips:
+                    clip.close()
+            except Exception as cleanup_error:
+                logger.warning(f"Error during video cleanup: {cleanup_error}")
+            finally:
+                for img_file in image_files:
+                    try:
+                        if os.path.exists(img_file):
+                            os.remove(img_file)
+                    except Exception as file_cleanup_error:
+                        logger.warning(f"Failed to cleanup temp file {img_file}: {file_cleanup_error}")
+                
+                processed_files = []
                 try:
-                    if os.path.exists(img_file):
-                        os.remove(img_file)
+                    processed_files = [f for f in os.listdir(self.temp_dir) if f.startswith("processed_") and generation_id in f]
                 except:
                     pass
+                
+                for pf in processed_files:
+                    try:
+                        os.remove(os.path.join(self.temp_dir, pf))
+                    except:
+                        pass
             
             return output_filename
             
         except Exception as e:
             logger.error(f"Error creating video: {e}")
+            
+            try:
+                for img_file in image_files:
+                    if os.path.exists(img_file):
+                        os.remove(img_file)
+            except:
+                pass
+            
             return None
     
     def _get_dimensions(self, aspect_ratio: str) -> Optional[Tuple[int, int]]:

@@ -11,12 +11,16 @@ from openai import OpenAI
 from elevenlabs.client import ElevenLabs
 import json
 import uuid
+import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from app.services.video_generator import VideoGenerator
 from app.services.social_media import SocialMediaUploader
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="DocuGen AI", description="AI-powered documentary video generation platform")
 
@@ -114,16 +118,16 @@ async def download_video(generation_id: str, format: str):
 
 @app.post("/api/generate-video")
 async def generate_video(request: VideoGenerationRequest, x_api_key: str = Header(None, alias="X-API-Key")):
-    print(f"\n🔑 DEBUG: Incoming X-API-Key: {x_api_key}")
-    print(f"🔍 DEBUG: Request Body: {request.dict()}")
+    logger.info(f"Incoming video generation request for topic: {request.topic}")
+    logger.debug(f"Request details: {request.dict()}")
 
     if not x_api_key or x_api_key != os.getenv("BACKEND_API_KEY"):
-        print("❌ ERROR: Missing/Invalid X-API-Key Header")
+        logger.error("Missing or invalid X-API-Key header")
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         generation_id = str(uuid.uuid4())
-        print(f"📌 DEBUG: Starting Generation {generation_id}")
+        logger.info(f"Starting video generation with ID: {generation_id}")
         
         generation = {
             "id": generation_id,
@@ -147,7 +151,7 @@ async def generate_video(request: VideoGenerationRequest, x_api_key: str = Heade
         return VideoGenerationResponse(**generation)
         
     except Exception as e:
-        print(f"🔥 CRITICAL ERROR: {str(e)}")
+        logger.error(f"Critical error in video generation endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload-to-social")
@@ -238,7 +242,7 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
                     f"/tmp/{audio_filename}", script, topic, generation_id, aspect_ratios
                 )
             except Exception as e:
-                print(f"Video generation failed: {e}")
+                logger.error(f"Video generation failed for {generation_id}: {e}")
                 video_files = {}
         
         generation["status"] = "completed"
@@ -256,12 +260,22 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
                 )
                 generation["social_uploads"] = upload_results
             except Exception as e:
-                print(f"Social media upload failed: {e}")
+                logger.error(f"Social media upload failed for {generation_id}: {e}")
                 generation["social_uploads"] = {}
         
     except Exception as e:
+        logger.error(f"Video generation failed for {generation_id}: {str(e)}")
         generation = next((g for g in video_generations if g["id"] == generation_id), None)
         if generation:
             generation["status"] = "failed"
             generation["error"] = str(e)
             generation["failed_at"] = datetime.now().isoformat()
+            
+            if "MoviePy" in str(e) or "video" in str(e).lower():
+                generation["error_type"] = "video_processing"
+            elif "OpenAI" in str(e) or "ElevenLabs" in str(e):
+                generation["error_type"] = "ai_service"
+            elif "Pexels" in str(e) or "image" in str(e).lower():
+                generation["error_type"] = "image_service"
+            else:
+                generation["error_type"] = "general"
