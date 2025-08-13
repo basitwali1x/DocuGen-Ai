@@ -1,53 +1,9 @@
 import os
 import requests
+from PIL import Image, ImageDraw, ImageFont
 
-# from PIL import Image, ImageDraw, ImageFont - temporarily disabled for deployment
-# 
-# if not hasattr(Image, 'ANTIALIAS'):
-#     Image.ANTIALIAS = Image.Resampling.LANCZOS
-#     print("Applied PIL ANTIALIAS compatibility fix in video_generator")
 
-class MockImage:
-    ANTIALIAS = 1
-    @staticmethod
-    def new(*args, **kwargs):
-        return None
-    @staticmethod
-    def open(*args, **kwargs):
-        return None
-
-class MockImageDraw:
-    @staticmethod
-    def Draw(*args, **kwargs):
-        return None
-
-class MockImageFont:
-    @staticmethod
-    def truetype(*args, **kwargs):
-        return None
-    @staticmethod
-    def load_default():
-        return None
-
-Image = MockImage
-ImageDraw = MockImageDraw
-ImageFont = MockImageFont
-
-try:
-    from moviepy.editor import *
-    MOVIEPY_AVAILABLE = True
-except ImportError as e:
-    print(f"MoviePy not available: {e}")
-    MOVIEPY_AVAILABLE = False
-    class AudioFileClip:
-        def __init__(self, *args, **kwargs):
-            pass
-    class ImageClip:
-        def __init__(self, *args, **kwargs):
-            pass
-    class CompositeVideoClip:
-        def __init__(self, *args, **kwargs):
-            pass
+from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip
 import tempfile
 import logging
 from typing import List, Dict, Optional, Tuple
@@ -172,10 +128,6 @@ class VideoGenerator:
     
     def create_video(self, audio_file: str, script: str, topic: str, generation_id: str, 
                     aspect_ratio: str = "16:9") -> Optional[str]:
-        if not MOVIEPY_AVAILABLE:
-            error_msg = "MoviePy not available - video creation disabled. Install moviepy to enable video generation."
-            logger.error(error_msg)
-            raise Exception(error_msg)
             
         try:
             keywords = self.extract_keywords(script, topic)
@@ -303,7 +255,7 @@ class VideoGenerator:
                     img = img.convert('RGB')
                 
                 # Resize image to target dimensions
-                img_resized = img.resize((target_width, target_height), Image.ANTIALIAS)
+                img_resized = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
                 
                 processed_filename = f"{self.temp_dir}/processed_{os.path.basename(img_file)}"
                 img_resized.save(processed_filename, 'JPEG', quality=95)
@@ -315,7 +267,7 @@ class VideoGenerator:
             return None
     
     def generate_multiple_formats(self, audio_file: str, script: str, topic: str, 
-                                 generation_id: str, formats: List[str] = None) -> Dict[str, Optional[str]]:
+                                 generation_id: str, formats: Optional[List[str]] = None) -> Dict[str, Optional[str]]:
         if formats is None:
             formats = ["16:9", "9:16", "1:1"]
         
