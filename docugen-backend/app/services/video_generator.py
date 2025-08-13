@@ -1,53 +1,14 @@
 import os
 import requests
 
-# from PIL import Image, ImageDraw, ImageFont - temporarily disabled for deployment
-# 
-# if not hasattr(Image, 'ANTIALIAS'):
-#     Image.ANTIALIAS = Image.Resampling.LANCZOS
-#     print("Applied PIL ANTIALIAS compatibility fix in video_generator")
+from PIL import Image, ImageDraw, ImageFont
 
-class MockImage:
-    ANTIALIAS = 1
-    @staticmethod
-    def new(*args, **kwargs):
-        return None
-    @staticmethod
-    def open(*args, **kwargs):
-        return None
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
+    print("Applied PIL ANTIALIAS compatibility fix in video_generator")
 
-class MockImageDraw:
-    @staticmethod
-    def Draw(*args, **kwargs):
-        return None
-
-class MockImageFont:
-    @staticmethod
-    def truetype(*args, **kwargs):
-        return None
-    @staticmethod
-    def load_default():
-        return None
-
-Image = MockImage
-ImageDraw = MockImageDraw
-ImageFont = MockImageFont
-
-try:
-    from moviepy.editor import *
-    MOVIEPY_AVAILABLE = True
-except ImportError as e:
-    print(f"MoviePy not available: {e}")
-    MOVIEPY_AVAILABLE = False
-    class AudioFileClip:
-        def __init__(self, *args, **kwargs):
-            pass
-    class ImageClip:
-        def __init__(self, *args, **kwargs):
-            pass
-    class CompositeVideoClip:
-        def __init__(self, *args, **kwargs):
-            pass
+from moviepy.editor import *
+MOVIEPY_AVAILABLE = True
 import tempfile
 import logging
 from typing import List, Dict, Optional, Tuple
