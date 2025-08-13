@@ -1,11 +1,14 @@
-FROM python:3.9-slim-bullseye
+FROM python:3.12-slim-bullseye
 
 # Install system dependencies required for video generation
 RUN apt-get update && apt-get install -y \
     libjpeg62-turbo \
+    libjpeg62-turbo-dev \
     libgl1 \
     libmagic1 \
     ffmpeg \
+    zlib1g-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -20,8 +23,8 @@ COPY pyproject.toml poetry.lock ./
 # Configure poetry to not create virtual environment
 RUN poetry config virtualenvs.create false
 
-# Install dependencies without dev dependencies
-RUN poetry install --without dev
+# Install dependencies without installing the current project
+RUN poetry install --no-root
 
 # Reinstall pillow with system dependencies available
 RUN pip uninstall -y pillow
