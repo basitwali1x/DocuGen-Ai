@@ -36,6 +36,12 @@ app.add_middleware(
 openai_api_key = os.getenv("OPENAI_API_KEY")
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
+print(f"🔑 OpenAI Key Loaded: {'Yes' if openai_api_key else 'No'}")
+if openai_api_key:
+    print(f"🔐 Key Starts With: {openai_api_key[:7]}...")
+    print(f"🔐 Key Ends With: ...{openai_api_key[-4:]}")
+    logger.info(f"OpenAI API key configured: {openai_api_key[:7]}...{openai_api_key[-4:]}")
+
 if openai_api_key:
     openai_client = OpenAI(api_key=openai_api_key)
 else:
@@ -75,6 +81,37 @@ class SocialUploadRequest(BaseModel):
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+@app.get("/test-openai")
+async def test_openai():
+    """Test endpoint to verify OpenAI API key functionality"""
+    try:
+        if not openai_client:
+            return {
+                "status": "error", 
+                "detail": "OpenAI client not initialized",
+                "key_present": bool(os.getenv("OPENAI_API_KEY")),
+                "key_preview": f"{os.getenv('OPENAI_API_KEY', '')[:7]}..." if os.getenv("OPENAI_API_KEY") else "None"
+            }
+        
+        test_response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Say 'TEST_OK'"}],
+            max_tokens=5
+        )
+        
+        return {
+            "status": "success", 
+            "response": test_response.choices[0].message.content,
+            "key_used": f"{os.getenv('OPENAI_API_KEY', '')[:7]}...{os.getenv('OPENAI_API_KEY', '')[-4:]}"
+        }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "detail": str(e),
+            "error_type": type(e).__name__,
+            "key_used": f"{os.getenv('OPENAI_API_KEY', '')[:7]}...{os.getenv('OPENAI_API_KEY', '')[-4:]}" if os.getenv("OPENAI_API_KEY") else "None"
+        }
 
 @app.get("/api/generations")
 async def get_generations():
