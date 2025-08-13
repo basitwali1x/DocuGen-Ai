@@ -1,9 +1,56 @@
 import os
 import requests
-from PIL import Image, ImageDraw, ImageFont
 
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+    print("PIL imported successfully")
+except ImportError as e:
+    print(f"PIL import failed: {e}")
+    PIL_AVAILABLE = False
+    class MockImage:
+        ANTIALIAS = 1
+        Resampling = type('Resampling', (), {'LANCZOS': 1})
+        @staticmethod
+        def new(*args, **kwargs):
+            return None
+        @staticmethod
+        def open(*args, **kwargs):
+            return None
+    
+    class MockImageDraw:
+        @staticmethod
+        def Draw(*args, **kwargs):
+            return None
+    
+    class MockImageFont:
+        @staticmethod
+        def truetype(*args, **kwargs):
+            return None
+        @staticmethod
+        def load_default():
+            return None
+    
+    Image = MockImage
+    ImageDraw = MockImageDraw
+    ImageFont = MockImageFont
 
-from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip
+try:
+    from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip
+    MOVIEPY_AVAILABLE = True
+    print("MoviePy imported successfully")
+except ImportError as e:
+    print(f"MoviePy import failed: {e}")
+    MOVIEPY_AVAILABLE = False
+    class AudioFileClip:
+        def __init__(self, *args, **kwargs):
+            pass
+    class ImageClip:
+        def __init__(self, *args, **kwargs):
+            pass
+    class CompositeVideoClip:
+        def __init__(self, *args, **kwargs):
+            pass
 import tempfile
 import logging
 from typing import List, Dict, Optional, Tuple
@@ -128,6 +175,11 @@ class VideoGenerator:
     
     def create_video(self, audio_file: str, script: str, topic: str, generation_id: str, 
                     aspect_ratio: str = "16:9") -> Optional[str]:
+        
+        if not PIL_AVAILABLE or not MOVIEPY_AVAILABLE:
+            error_msg = f"Video generation dependencies not available - PIL: {PIL_AVAILABLE}, MoviePy: {MOVIEPY_AVAILABLE}"
+            logger.warning(error_msg)
+            return None
             
         try:
             keywords = self.extract_keywords(script, topic)

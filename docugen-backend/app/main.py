@@ -76,6 +76,43 @@ class SocialUploadRequest(BaseModel):
 async def healthz():
     return {"status": "ok"}
 
+@app.get("/api/test-dependencies")
+async def test_dependencies():
+    """Test endpoint to verify video generation dependencies are working"""
+    try:
+        from PIL import Image
+        pil_status = "available"
+        
+        from moviepy.editor import AudioFileClip
+        moviepy_status = "available"
+        
+        video_gen = VideoGenerator()
+        video_gen_status = "initialized"
+        
+        return {
+            "status": "ok",
+            "dependencies": {
+                "PIL": pil_status,
+                "MoviePy": moviepy_status,
+                "VideoGenerator": video_gen_status
+            },
+            "api_keys": {
+                "OpenAI": "available" if openai_client else "missing",
+                "ElevenLabs": "available" if elevenlabs_client else "missing",
+                "Pexels": "configured" if os.getenv("PEXELS_API_KEY") else "missing"
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "dependencies": {
+                "PIL": "error",
+                "MoviePy": "error", 
+                "VideoGenerator": "error"
+            }
+        }
+
 @app.get("/api/generations")
 async def get_generations():
     return {"generations": video_generations}
