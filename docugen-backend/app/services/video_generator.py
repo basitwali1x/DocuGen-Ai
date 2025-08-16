@@ -1,9 +1,52 @@
 import os
 import requests
-from PIL import Image, ImageDraw, ImageFont
 
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+    
+    if not hasattr(Image, 'ANTIALIAS'):
+        Image.ANTIALIAS = Image.Resampling.LANCZOS
+        print("✅ Applied PIL ANTIALIAS compatibility fix in video_generator")
+    
+    print("✅ PIL successfully imported and available for video generation")
+except ImportError as e:
+    print(f"❌ PIL not available: {e}")
+    PIL_AVAILABLE = False
+    class Image:
+        @staticmethod
+        def new(*args, **kwargs):
+            pass
+        @staticmethod
+        def open(*args, **kwargs):
+            pass
+    class ImageDraw:
+        @staticmethod
+        def Draw(*args, **kwargs):
+            pass
+    class ImageFont:
+        @staticmethod
+        def truetype(*args, **kwargs):
+            pass
+        @staticmethod
+        def load_default(*args, **kwargs):
+            pass
 
-from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip
+try:
+    from moviepy.editor import *
+    MOVIEPY_AVAILABLE = True
+except ImportError as e:
+    print(f"MoviePy not available: {e}")
+    MOVIEPY_AVAILABLE = False
+    class AudioFileClip:
+        def __init__(self, *args, **kwargs):
+            pass
+    class ImageClip:
+        def __init__(self, *args, **kwargs):
+            pass
+    class CompositeVideoClip:
+        def __init__(self, *args, **kwargs):
+            pass
 import tempfile
 import logging
 from typing import List, Dict, Optional, Tuple
@@ -101,6 +144,10 @@ class VideoGenerator:
         return None
     
     def _create_placeholder_image(self, image_data: Dict) -> str:
+        if not PIL_AVAILABLE:
+            logger.error("❌ PIL not available - cannot create placeholder images")
+            return None
+            
         width, height = 1920, 1080
         color = image_data.get("color", (100, 100, 100))
         
@@ -128,41 +175,65 @@ class VideoGenerator:
     
     def create_video(self, audio_file: str, script: str, topic: str, generation_id: str, 
                     aspect_ratio: str = "16:9") -> Optional[str]:
+        logger.info(f"🎬 Starting video creation for generation {generation_id}, aspect ratio {aspect_ratio}")
+        
+        if not MOVIEPY_AVAILABLE:
+            logger.error("❌ MoviePy not available - video creation disabled")
+            return None
+            
+        if not PIL_AVAILABLE:
+            logger.error("❌ PIL not available - image processing disabled")
+            return None
             
         try:
             keywords = self.extract_keywords(script, topic)
+            logger.info(f"🔍 Extracted keywords: {keywords}")
+            
             images_data = self.fetch_stock_footage(keywords, count=8)
+            logger.info(f"🖼️ Fetched {len(images_data)} image data entries")
             
             image_files = []
-            for img_data in images_data:
+            for i, img_data in enumerate(images_data):
+                logger.info(f"🖼️ Downloading image {i+1}/{len(images_data)}: {img_data.get('keyword', 'unknown')}")
                 img_file = self.download_image(img_data)
                 if img_file:
                     image_files.append(img_file)
+                    logger.info(f"✅ Downloaded image: {img_file}")
+                else:
+                    logger.warning(f"❌ Failed to download image for: {img_data.get('keyword', 'unknown')}")
             
             if not image_files:
-                logger.error("No images available for video creation")
+                logger.error("❌ No images available for video creation")
                 return None
             
+            logger.info(f"🎬 Creating video with {len(image_files)} images")
+            
+            logger.info(f"🎵 Loading audio file: {audio_file}")
             audio_clip = AudioFileClip(audio_file)
             duration = audio_clip.duration
+            logger.info(f"🎵 Audio duration: {duration} seconds")
             
             dimensions = self._get_dimensions(aspect_ratio)
             if not dimensions:
-                logger.error(f"Invalid aspect ratio: {aspect_ratio}")
+                logger.error(f"❌ Invalid aspect ratio: {aspect_ratio}")
                 return None
             
             width, height = dimensions
+            logger.info(f"🎬 Video dimensions: {width}x{height}")
             
             clips = []
             image_duration = duration / len(image_files)
+            logger.info(f"🎬 Duration per image: {image_duration} seconds")
             
             for i, img_file in enumerate(image_files):
                 try:
+                    logger.info(f"🖼️ Processing image {i+1}/{len(image_files)}: {img_file}")
                     processed_img_file = self._preprocess_image_for_moviepy(img_file, width, height)
                     if not processed_img_file:
-                        logger.error(f"Failed to preprocess image {img_file}")
+                        logger.error(f"❌ Failed to preprocess image {img_file}")
                         continue
                     
+                    logger.info(f"✅ Preprocessed image: {processed_img_file}")
                     img_clip = ImageClip(processed_img_file, duration=image_duration)
                     
                     if i > 0:
@@ -172,20 +243,24 @@ class VideoGenerator:
                     
                     img_clip = img_clip.set_start(i * image_duration)
                     clips.append(img_clip)
+                    logger.info(f"✅ Created image clip {i+1}")
                     
                 except Exception as e:
-                    logger.error(f"Error processing image {img_file}: {e}")
+                    logger.error(f"❌ Error processing image {img_file}: {e}")
                     continue
             
             if not clips:
-                logger.error("No valid image clips created")
+                logger.error("❌ No valid image clips created")
                 return None
             
+            logger.info(f"🎬 Compositing {len(clips)} video clips")
             video = CompositeVideoClip(clips, size=(width, height))
+            logger.info("🎵 Setting audio track")
             video = video.set_audio(audio_clip)
             video = video.set_duration(duration)
             
             output_filename = f"{self.temp_dir}/video_{generation_id}_{aspect_ratio.replace(':', 'x')}.mp4"
+            logger.info(f"🎬 Writing video to: {output_filename}")
             
             video.write_videofile(
                 output_filename,
@@ -198,45 +273,27 @@ class VideoGenerator:
                 logger=None
             )
             
-            try:
-                video.close()
-                audio_clip.close()
-                for clip in clips:
-                    clip.close()
-            except Exception as cleanup_error:
-                logger.warning(f"Error during video cleanup: {cleanup_error}")
-            finally:
-                for img_file in image_files:
-                    try:
-                        if os.path.exists(img_file):
-                            os.remove(img_file)
-                    except Exception as file_cleanup_error:
-                        logger.warning(f"Failed to cleanup temp file {img_file}: {file_cleanup_error}")
-                
-                processed_files = []
+            logger.info(f"✅ Video created successfully: {output_filename}")
+            
+            video.close()
+            audio_clip.close()
+            for clip in clips:
+                clip.close()
+            
+            for img_file in image_files:
                 try:
-                    processed_files = [f for f in os.listdir(self.temp_dir) if f.startswith("processed_") and generation_id in f]
+                    if os.path.exists(img_file):
+                        os.remove(img_file)
                 except:
                     pass
-                
-                for pf in processed_files:
-                    try:
-                        os.remove(os.path.join(self.temp_dir, pf))
-                    except:
-                        pass
             
             return output_filename
             
         except Exception as e:
-            logger.error(f"Error creating video: {e}")
-            
-            try:
-                for img_file in image_files:
-                    if os.path.exists(img_file):
-                        os.remove(img_file)
-            except:
-                pass
-            
+            logger.error(f"❌ Error creating video for {generation_id}: {str(e)}")
+            logger.error(f"❌ Error type: {type(e).__name__}")
+            logger.error(f"❌ MoviePy available: {MOVIEPY_AVAILABLE}")
+            logger.error(f"❌ PIL available: {PIL_AVAILABLE}")
             return None
     
     def _get_dimensions(self, aspect_ratio: str) -> Optional[Tuple[int, int]]:
@@ -249,13 +306,17 @@ class VideoGenerator:
     
     def _preprocess_image_for_moviepy(self, img_file: str, target_width: int, target_height: int) -> Optional[str]:
         """Preprocess image to avoid PIL compatibility issues with MoviePy"""
+        if not PIL_AVAILABLE:
+            logger.error("❌ PIL not available - cannot preprocess images")
+            return img_file  # Return original file if PIL not available
+            
         try:
             with Image.open(img_file) as img:
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 
                 # Resize image to target dimensions
-                img_resized = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                img_resized = img.resize((target_width, target_height), Image.ANTIALIAS)
                 
                 processed_filename = f"{self.temp_dir}/processed_{os.path.basename(img_file)}"
                 img_resized.save(processed_filename, 'JPEG', quality=95)
@@ -264,10 +325,10 @@ class VideoGenerator:
                 
         except Exception as e:
             logger.error(f"Error preprocessing image {img_file}: {e}")
-            return None
+            return img_file  # Return original file if preprocessing fails
     
     def generate_multiple_formats(self, audio_file: str, script: str, topic: str, 
-                                 generation_id: str, formats: Optional[List[str]] = None) -> Dict[str, Optional[str]]:
+                                 generation_id: str, formats: List[str] = None) -> Dict[str, Optional[str]]:
         if formats is None:
             formats = ["16:9", "9:16", "1:1"]
         

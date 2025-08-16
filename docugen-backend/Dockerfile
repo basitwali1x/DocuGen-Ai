@@ -1,14 +1,39 @@
-FROM python:3.9-slim-bullseye
+FROM python:3.12
 
-# Install system dependencies required for video generation
+# Install system dependencies for Pillow, MoviePy and video processing
 RUN apt-get update && apt-get install -y \
+    libjpeg62-turbo-dev \
     libjpeg62-turbo \
-    libgl1 \
-    libmagic1 \
+    libpng-dev \
+    libpng16-16 \
+    libtiff5-dev \
+    libtiff5 \
+    libfreetype6-dev \
+    libfreetype6 \
+    liblcms2-dev \
+    liblcms2-2 \
+    libwebp-dev \
+    libwebp7 \
+    libharfbuzz-dev \
+    libharfbuzz0b \
+    libfribidi-dev \
+    libfribidi0 \
+    libxcb1-dev \
+    libxcb1 \
+    zlib1g-dev \
+    zlib1g \
+    pkg-config \
+    gcc \
+    g++ \
+    build-essential \
     ffmpeg \
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswscale-dev \
+    libavresample-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
 # Install Poetry
@@ -17,29 +42,15 @@ RUN pip install poetry
 # Copy poetry files
 COPY pyproject.toml poetry.lock ./
 
-# Configure poetry to not create virtual environment
-RUN poetry config virtualenvs.create false
-
-# Install dependencies
-RUN poetry install --no-root
+# Configure poetry and install dependencies
+RUN poetry config virtualenvs.create false \
+    && poetry install --only=main
 
 # Copy application code
 COPY . .
 
-# Test dependencies during build
-RUN python -c "from PIL import Image; print('PIL OK')" && \
-    python -c "from moviepy.editor import AudioFileClip; print('MoviePy OK')" && \
-    echo "All dependencies working"
-
 # Expose port
 EXPOSE 8000
 
-# Set environment variables for API keys
-ENV OPENAI_API_KEY=""
-ENV ELEVENLABS_API_KEY=""
-ENV PEXELS_API_KEY=""
-ENV BACKEND_API_KEY="deployment-test-key-123"
-ENV CORS_ORIGINS="*"
-
-# Start the application
-CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application
+CMD ["poetry", "run", "fastapi", "run", "app/main.py", "--host", "0.0.0.0", "--port", "8000"]
