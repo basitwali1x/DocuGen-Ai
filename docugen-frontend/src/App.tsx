@@ -69,9 +69,13 @@ function App() {
 
   useEffect(() => {
     fetchGenerations()
-    const interval = setInterval(fetchGenerations, 3000)
-    return () => clearInterval(interval)
-  }, [])
+    
+    const hasActiveGenerations = generations.some(g => g.status === 'generating')
+    if (hasActiveGenerations) {
+      const interval = setInterval(fetchGenerations, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [generations])
 
   const fetchGenerations = async () => {
     try {
