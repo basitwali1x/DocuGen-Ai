@@ -1,4 +1,4 @@
-# import app.pil_compat  # Apply PIL compatibility fix before any other imports - temporarily disabled for deployment
+import app.pil_compat  # Apply PIL compatibility fix before any other imports
 
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,16 +11,12 @@ from openai import OpenAI
 from elevenlabs.client import ElevenLabs
 import json
 import uuid
-import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from app.services.video_generator import VideoGenerator
 from app.services.social_media import SocialMediaUploader
 
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI(title="DocuGen AI", description="AI-powered documentary video generation platform")
 
@@ -33,21 +29,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-openai_api_key = os.getenv("OPENAI_API_KEY")
-elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
-
-if openai_api_key:
-    openai_client = OpenAI(api_key=openai_api_key)
-else:
-    logger.warning("OPENAI_API_KEY not found - OpenAI functionality will be disabled")
+try:
+    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    print("✅ OpenAI client initialized successfully")
+except Exception as e:
+    print(f"⚠️ OpenAI client initialization failed: {e}")
     openai_client = None
 
-if elevenlabs_api_key:
-    elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
-else:
-    logger.warning("ELEVENLABS_API_KEY not found - ElevenLabs functionality will be disabled")
+try:
+    elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+    print("✅ ElevenLabs client initialized successfully")
+except Exception as e:
+    print(f"⚠️ ElevenLabs client initialization failed: {e}")
     elevenlabs_client = None
-
 video_generator = VideoGenerator()
 social_uploader = SocialMediaUploader()
 
@@ -131,16 +125,16 @@ async def download_video(generation_id: str, format: str):
 
 @app.post("/api/generate-video")
 async def generate_video(request: VideoGenerationRequest, x_api_key: str = Header(None, alias="X-API-Key")):
-    logger.info(f"Incoming video generation request for topic: {request.topic}")
-    logger.debug(f"Request details: {request.dict()}")
+    print(f"\n🔑 DEBUG: Incoming X-API-Key: {x_api_key}")
+    print(f"🔍 DEBUG: Request Body: {request.dict()}")
 
     if not x_api_key or x_api_key != os.getenv("BACKEND_API_KEY"):
-        logger.error("Missing or invalid X-API-Key header")
+        print("❌ ERROR: Missing/Invalid X-API-Key Header")
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
         generation_id = str(uuid.uuid4())
-        logger.info(f"Starting video generation with ID: {generation_id}")
+        print(f"📌 DEBUG: Starting Generation {generation_id}")
         
         generation = {
             "id": generation_id,
@@ -164,7 +158,7 @@ async def generate_video(request: VideoGenerationRequest, x_api_key: str = Heade
         return VideoGenerationResponse(**generation)
         
     except Exception as e:
-        logger.error(f"Critical error in video generation endpoint: {str(e)}")
+        print(f"🔥 CRITICAL ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/upload-to-social")
@@ -199,8 +193,8 @@ async def upload_to_social(request: SocialUploadRequest):
         raise HTTPException(status_code=500, detail=f"Failed to upload to social media: {str(e)}")
 
 async def process_video_generation(generation_id: str, topic: str, niche: str, 
-                                   aspect_ratios: Optional[List[str]] = None, 
-                                   social_platforms: Optional[List[str]] = None):
+                                   aspect_ratios: List[str] = None, 
+                                   social_platforms: List[str] = None):
     try:
         generation = next((g for g in video_generations if g["id"] == generation_id), None)
         if not generation:
@@ -212,38 +206,28 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         Format as a narrative script without stage directions."""
         
         if not openai_client:
-            logger.error(f"OpenAI client not available for generation {generation_id}")
-            raise Exception("Script generation failed: OpenAI API key not configured")
+            raise Exception("OpenAI client not available - missing API key")
             
-        try:
-            script_response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a professional documentary scriptwriter."},
-                    {"role": "user", "content": script_prompt}
-                ],
-                max_tokens=1000
-            )
-        except Exception as openai_error:
-            logger.error(f"OpenAI API error for generation {generation_id}: {str(openai_error)}")
-            raise Exception(f"Script generation failed: {str(openai_error)}")
+        script_response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a professional documentary scriptwriter."},
+                {"role": "user", "content": script_prompt}
+            ],
+            max_tokens=1000
+        )
         
         script = script_response.choices[0].message.content
         
         if not elevenlabs_client:
-            logger.error(f"ElevenLabs client not available for generation {generation_id}")
-            raise Exception("Voice generation failed: ElevenLabs API key not configured")
+            raise Exception("ElevenLabs client not available - missing API key")
             
-        try:
-            audio = elevenlabs_client.text_to_speech.convert(
-                text=script,
-                voice_id="JBFqnCBsd6RMkjVDRZzb",  # Default voice
-                model_id="eleven_multilingual_v2",
-                output_format="mp3_44100_128"
-            )
-        except Exception as elevenlabs_error:
-            logger.error(f"ElevenLabs API error for generation {generation_id}: {str(elevenlabs_error)}")
-            raise Exception(f"Voice generation failed: {str(elevenlabs_error)}")
+        audio = elevenlabs_client.text_to_speech.convert(
+            text=script,
+            voice_id="JBFqnCBsd6RMkjVDRZzb",  # Default voice
+            model_id="eleven_multilingual_v2",
+            output_format="mp3_44100_128"
+        )
         
         audio_filename = f"voiceover_{generation_id}.mp3"
         with open(f"/tmp/{audio_filename}", "wb") as f:
@@ -254,32 +238,29 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
         Keep it under 200 characters and make it compelling for viewers."""
         
         if not openai_client:
-            logger.error(f"OpenAI client not available for description generation {generation_id}")
-            raise Exception("Description generation failed: OpenAI API key not configured")
+            raise Exception("OpenAI client not available - missing API key")
             
-        try:
-            description_response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a video marketing expert."},
-                    {"role": "user", "content": description_prompt}
-                ],
-                max_tokens=100
-            )
-        except Exception as openai_error:
-            logger.error(f"OpenAI API error for description generation {generation_id}: {str(openai_error)}")
-            raise Exception(f"Description generation failed: {str(openai_error)}")
+        description_response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a video marketing expert."},
+                {"role": "user", "content": description_prompt}
+            ],
+            max_tokens=100
+        )
         
         description = description_response.choices[0].message.content
         
         video_files = {}
         if aspect_ratios:
             try:
+                print(f"🎬 Attempting video generation for {generation_id}")
                 video_files = video_generator.generate_multiple_formats(
                     f"/tmp/{audio_filename}", script, topic, generation_id, aspect_ratios
                 )
+                print(f"🎬 Video generation result: {video_files}")
             except Exception as e:
-                logger.error(f"Video generation failed for {generation_id}: {e}")
+                print(f"❌ Video generation failed for {generation_id}: {e}")
                 video_files = {}
         
         generation["status"] = "completed"
@@ -297,33 +278,12 @@ async def process_video_generation(generation_id: str, topic: str, niche: str,
                 )
                 generation["social_uploads"] = upload_results
             except Exception as e:
-                logger.error(f"Social media upload failed for {generation_id}: {e}")
+                print(f"Social media upload failed: {e}")
                 generation["social_uploads"] = {}
         
     except Exception as e:
-        logger.error(f"Video generation failed for {generation_id}: {str(e)}")
         generation = next((g for g in video_generations if g["id"] == generation_id), None)
         if generation:
             generation["status"] = "failed"
+            generation["error"] = str(e)
             generation["failed_at"] = datetime.now().isoformat()
-            
-            error_message = str(e)
-            
-            if "Script generation failed:" in error_message:
-                generation["error"] = "Failed to generate script using OpenAI. Please check your OpenAI API key and try again."
-                generation["error_type"] = "openai_api"
-            elif "Voice generation failed:" in error_message:
-                generation["error"] = "Failed to generate voice using ElevenLabs. Please check your ElevenLabs API key and try again."
-                generation["error_type"] = "elevenlabs_api"
-            elif "Description generation failed:" in error_message:
-                generation["error"] = "Failed to generate description using OpenAI. Please check your OpenAI API key and try again."
-                generation["error_type"] = "openai_api"
-            elif "MoviePy" in error_message or "video" in error_message.lower():
-                generation["error"] = "Video processing failed. This may be due to system resources or video generation issues."
-                generation["error_type"] = "video_processing"
-            elif "Pexels" in error_message or "image" in error_message.lower():
-                generation["error"] = "Image retrieval failed. Please check your Pexels API key and try again."
-                generation["error_type"] = "image_service"
-            else:
-                generation["error"] = f"An unexpected error occurred: {error_message}"
-                generation["error_type"] = "general"
